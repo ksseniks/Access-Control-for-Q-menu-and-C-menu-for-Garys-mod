@@ -1,4 +1,5 @@
 ---------------------------------ACCES TABLE---------------------------------
+local timePlayerLeave = timePlayerLeave or {}
 local allowedPlayersQ = allowedPlayersQ or {}
 local allowedPlayersC = allowedPlayersC or {}
 ---------------------------------END ACCES TABLE---------------------------------
@@ -12,11 +13,11 @@ if SERVER then
     ---------------------------------END ADD NETWORK STRING---------------------------------
     --==========================================================================================================--
     ---------------------------------LOAD ACCESS DATA---------------------------------
-    local saveFile = "Access Menus.json"
+    local saveFile = "access menu.json"
     local function LoadAccessData()
         if file.Exists(saveFile, "DATA") then
             local content = file.Read(saveFile, "DATA")
-            local data = util.JSONToTable(content)
+            local data = util.JSONToTable(content, false, true)
             if (data) then
                 allowedPlayersQ = data.Q or {}
                 allowedPlayersC = data.C or {}
@@ -28,6 +29,32 @@ if SERVER then
     ---------------------------------LOAD ON START LUA---------------------------------
     LoadAccessData()
     ---------------------------------END LOAD ON START LUA---------------------------------
+    --==========================================================================================================--
+    ---------------------------------PLAYER DISCONNECT---------------------------------
+    hook.Add("PlayerDisconnected", "PlayerleaveDis", function(player)
+        local timeTable = os.time()
+        timePlayerLeave[player:SteamID64()] = os.time()
+    end)
+    ---------------------------------END PLAYER DISCONNECT---------------------------------
+    --==========================================================================================================--
+    ---------------------------------PLAYER CONNECT---------------------------------
+    local EnableFeature = CreateConVar("ks_enabledTimer", "1", {FCVAR_ARCHIVE, FCVAR_NOTIFY, FCVAR_REPLICATED}, "Включить функцию (1 - да, 0 - нет)")
+    hook.Add("PlayerInitialSpawn", "PlayerAddToServer", function(player)
+        playerID64 = player:SteamID64()
+        if EnableFeature:GetBool() then
+            if (timePlayerLeave[playerID64] != nil) then
+                if (os.time() - timePlayerLeave[playerID64] > 10) then
+                    allowedPlayersQ[playerID64] = false
+                    allowedPlayersC[playerID64] = false
+                end
+            end
+        end
+
+        net.Start("UpdateAllowedList")
+        net.WriteTable({Q = allowedPlayersQ, C = allowedPlayersC})
+        net.Send(player)
+    end)
+    ---------------------------------END PLAYER CONNECT---------------------------------
     --==========================================================================================================--
     ---------------------------------CONCOMMAND OPEN ACCES MENU---------------------------------
     concommand.Add("ks_accessMenu", function(onlineplayers)
@@ -118,8 +145,6 @@ if CLIENT then
     ---------------------------------OPEN ACCESS MENU---------------------------------
     net.Receive("OpenAccessMenu", function()
         local players = net.ReadTable()
-        local lang = GetLanguedge()
-        local L = LanguageBase[lang]
 
         local frame = vgui.Create("DFrame")
         frame:SetSize(400, 500)
